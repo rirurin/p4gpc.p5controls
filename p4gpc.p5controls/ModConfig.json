@@ -1,0 +1,16 @@
+{
+  "ModId": "p4gpc.p5controls",
+  "ModName": "Persona 5 Battle Controls",
+  "ModAuthor": "Rirurin",
+  "ModVersion": "1.0.0",
+  "ModDescription": "Recreates the functionality of Persona 5's Battle Menu.",
+  "ModDll": "p4gpc.p5controls.dll",
+  "ModIcon": "Preview.png",
+  "ModR2RManagedDll32": "x86/p4gpc.p5controls.dll",
+  "ModR2RManagedDll64": "x64/p4gpc.p5controls.dll",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "",
+  "ModDependencies": [ "reloaded.sharedlib.hooks" ],
+  "OptionalDependencies": [ "p4gpc.infinitepersonaswitcher" ],
+  "SupportedAppId": [ "p4g.exe" ]
+}
