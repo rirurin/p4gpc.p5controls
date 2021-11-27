@@ -40,17 +40,29 @@ namespace p4gpc.p5controls
         public void LogDebug(string message)
         {
             if (Configuration.DebugEnabled)
-                _logger.WriteLine($"[P5BattleControls] [DEBUG] {message}", System.Drawing.Color.Yellow);
+                _logger.WriteLine($"[P5BattleControls] [DEBUG] {message}", System.Drawing.Color.LightGray);
         }
 
         public void Log(string message)
         {
-            _logger.WriteLine($"[P5BattleControls] {message}", System.Drawing.Color.LimeGreen);
+            _logger.WriteLine($"[P5BattleControls] {message}");
+        }
+
+        public void LogSuccess(string message)
+        {
+            _logger.WriteLine($"[P5BattleControls] [OK] {message}", System.Drawing.Color.LimeGreen);
         }
 
         public void LogError(string message, Exception e)
         {
             _logger.WriteLine($"[P5BattleControls] [ERROR] {message}: {e.Message}", System.Drawing.Color.Red);
+        }
+        public void LogIntro()
+        {
+            _logger.Write("[P5BattleControls] ");
+            _logger.Write("Persona 5 ", System.Drawing.Color.Red);
+            _logger.Write("Battle Controls for ");
+            _logger.WriteLine("Persona 4 Golden", System.Drawing.Color.Yellow);
         }
 
         // Miscellaneous Functions

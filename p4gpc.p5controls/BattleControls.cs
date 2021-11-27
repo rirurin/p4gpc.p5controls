@@ -38,7 +38,6 @@ namespace p4gpc.p5controls
         private IAsmHook _selectedMenuHook;
         private IAsmHook _blockInput;
         private IAsmHook _selectedEnemyHook;
-        private IAsmHook _attackAnalysis;
         private IAsmHook _btlAction;
         private IAsmHook _personaMenu;
         private IAsmHook _tacticsMenu;
@@ -47,7 +46,6 @@ namespace p4gpc.p5controls
         public int esiValue;
         public int inBattle;
         public bool inMainBattleMenu = true;
-        public int menuSelect;
         public int hInput = 0;
         public bool NextTurn = false;
         public int menuSelection = 0;
@@ -84,9 +82,7 @@ namespace p4gpc.p5controls
                 string[] blockInputFunction =
                 {
                     $"use32",
-                    // $"mov edi, 0",
                     $"mov edi, 16384",
-                    // $"{hooks.Utilities.AssemblePushReturn((IntPtr)(_baseAddress + 0xAC9F0), false)}",
                 };
                 string[] selectedEnemyFunction =
                 {
@@ -98,14 +94,9 @@ namespace p4gpc.p5controls
                 string[] attackAnalysisFunction =
                 {
                     $"use32",
-                    // $"call {_baseAddress + 0xACA50}",
                     $"{hooks.Utilities.PushCdeclCallerSavedRegisters()}",
                     $"{hooks.Utilities.GetAbsoluteCallMnemonics(attackAnalysis, out _attackAnalysisReverseWrapper)}",
                     $"{hooks.Utilities.PopCdeclCallerSavedRegisters()}",
-                    // $"{hooks.Utilities.GetPushReturnMnemonics((IntPtr)(_baseAddress + 0xACA50), false)}",
-                    // $"mov eax, 0xB",
-                    // $"mov eax, 0x10b",
-                    // $"jmp {0x4ACA50}",
                 };
                 string[] btlActionFunction =
                 {
@@ -130,8 +121,6 @@ namespace p4gpc.p5controls
                     $"{hooks.Utilities.PopCdeclCallerSavedRegisters()}",
                 };
 
-                // personaMenuFunction[1] = $"mov eax, 1";
-
                 // scanner init code
                 using var thisProcess = Process.GetCurrentProcess();
                 _baseAddress = thisProcess.MainModule.BaseAddress.ToInt32();
@@ -148,23 +137,6 @@ namespace p4gpc.p5controls
                     while (true)
                     {
                         _memory.SafeRead((IntPtr)(_baseAddress + 0x21A967B0), out inBattle); // is the user in battle?
-                        // _utils.Log($"{inBattle}");
-                        // _memory.SafeRead((IntPtr)(_baseAddress + 0x229C30B3), out byte selectingMenuItemStatus);
-                        //_utils.Log($"{selectingMenuItemStatus}");
-                        /* if (selectingMenuItemStatus == 132)
-                        {
-                            _memory.Write((IntPtr)(_baseAddress + 0x229C30B3), 0xFFFF3785);
-                        } */
-                        if (menuSelection != 5 && inPersonaMenu)
-                        {
-                            personaMenuFunction[1] = $"mov eax, 3";
-                            inPersonaMenu = false;
-                        }
-                        if (menuSelection == 5 && !inPersonaMenu)
-                        {
-                            inPersonaMenu = true;
-                            personaMenuFunction[1] = $"mov eax, 1";
-                        }
                         Thread.Sleep(50);
                     }
                 }
@@ -172,7 +144,6 @@ namespace p4gpc.p5controls
                 // sig scan for all the addresses :raidoufrost:
 
                 // hooks (grab register information from here)
-
                 long menuHookPointer = 0;
                 long inputBlockPointer = 0;
                 long selectedEnemyPointer = 0;
@@ -182,9 +153,9 @@ namespace p4gpc.p5controls
                 long assistButtonPointer = 0;
                 long personaSwitcherPointer = 0;
                 long tacticsPointer = 0;
-
+                
                 // Sig Scan for addresses asynchronously so it doesn't take like 5 hours
-
+                
                 List<Task> pointers = new List<Task>();
                 pointers.Add(Task.Run(() =>
                 {
@@ -236,8 +207,6 @@ namespace p4gpc.p5controls
                     personaSwitcherPointer = SigScan("F7 46 ?? ?? ?? ?? ?? 74 AF", "Persona Switcher Pointer");
                 })); // pointer that determines if the persona menu can be accessed
                 */
-
-
                 try
                 {
                     Task.WaitAll(pointers.ToArray());
@@ -246,15 +215,9 @@ namespace p4gpc.p5controls
                     throw e;
                 }
 
-                //long menuHookPointer =      SigScan("53 56 57 B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 7D 0C F3 0F 10 05", "Menu Hook Pointer");
-                //long inputBlockPointer =    SigScan("89 3D ?? ?? ?? ?? 89 C1 A3 ?? ?? ?? ?? 80 FA D0 76 ??", "Input Block Pointer");
-                //long selectedEnemyPointer = SigScan("8B 44 24 20 66 39 70 3A","Selected Enemy Pointer");
-                //long battleActionPointer =  SigScan("66 89 77 0C C7 47 24 00 00 00 00 57 8D 04 40 8B 04 85", "Battle Action Pointer");
-                //long rushModePointer =      SigScan("F7 05 ?? ?? ?? ?? 00 50 00 00 0F 84 ?? ?? ?? ?? E8", "Rush Mode Pointer");
-                //long personaMenuPointer =   SigScan("0F B7 D8 89 D8 83 E8 01 0F 84", "Persona Menu Pointer");
-                //long assistButtonPointer =  SigScan("AD 89 68 2B", "Assist Button Pointer");
-
                 battleActionPointer = battleActionPointer + 0xF;
+
+                _utils.Log("Hooking into battle functions");
 
                 _selectedMenuHook =     hooks.CreateAsmHook(selectedItemFunction, (menuHookPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _blockInput =           hooks.CreateAsmHook(blockInputFunction, (inputBlockPointer), AsmHookBehaviour.ExecuteFirst).Activate();
@@ -272,14 +235,14 @@ namespace p4gpc.p5controls
                 _memory.SafeWrite((IntPtr)(rushModePointer + 0x1C), 0x0000000821E881C405F7);
 
                 // Replace Cross in All Out Attack/Party Assist with Triangle
-                _memory.SafeWrite((IntPtr)(assistButtonPointer), 0x00001000);
+                _memory.SafeWrite((IntPtr)(assistButtonPointer - 0x5B), 0x00001000);
 
                 // Remove holding RB for next turn
                 _memory.SafeWrite((IntPtr)(nextTurnPointer - 0x1F), 0x00000000);
 
             } catch (Exception e)
             {
-                _utils.LogError($"Error hooking functions, unloading mod", e);
+                _utils.LogError($"Error hooking battle functions, Unloading mod", e);
             }
         }
         // Sigscan Function
@@ -291,7 +254,7 @@ namespace p4gpc.p5controls
                 using var thisProcess = Process.GetCurrentProcess();
                 using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
                 long functionAddress = scanner.CompiledFindPattern(pattern).Offset + _baseAddress;
-                 _utils.Log($"Found function {functionName} at 0x{functionAddress:X}");
+                 _utils.LogSuccess($"Found function {functionName} at 0x{functionAddress:X}");
                 return functionAddress;
             } catch (Exception e)
             {
@@ -427,7 +390,8 @@ namespace p4gpc.p5controls
                 if (risingEdge)
                 {
                     risenEdge = true;
-                } else
+                }
+                else
                 {
                     risenEdge = false;
                 }
@@ -439,7 +403,7 @@ namespace p4gpc.p5controls
                         menuSelection = 4;
                         var _input = new Thread(Input);
                         _input.Start();
-                        
+
                     }
                     if (input == 0x8000) // SQUARE - ITEM
                     {
@@ -454,7 +418,8 @@ namespace p4gpc.p5controls
                             // _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE8220), 0x000000C6840F);
                             _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE9492), 0x009C840F);
                             NextTurn = !NextTurn;
-                        } else
+                        }
+                        else
                         {
                             menuSelection = 2;
                             var _input = new Thread(Input);
@@ -463,7 +428,7 @@ namespace p4gpc.p5controls
                     }
                     if (input == 0x4000) // CROSS - ATTACK
                     {
-                        
+
                     }
                     if (input == 0x8) // START - RUSH
                     {
@@ -496,7 +461,8 @@ namespace p4gpc.p5controls
                         var _input = new Thread(Input);
                         _input.Start();
                     }
-                } else
+                }
+                else
                 {
                     if (input == 0x2000 && menuLayer == 0) // CIRCLE - GO BACK
                     {
@@ -523,7 +489,8 @@ namespace p4gpc.p5controls
                             {
                                 menuLayer = 1;
                                 _utils.Log("menulayer do be 1");
-                            } else
+                            }
+                            else
                             {
                                 menuLayer = 0;
                                 _utils.Log("menulayer do be 0");
@@ -536,11 +503,10 @@ namespace p4gpc.p5controls
                         {
                             menuSelection = 5;
                             menuLayer = 1;
+                            personaMenuStatus = 0;
                             _personaMenu.Enable();
                             var _input = new Thread(Input);
                             _input.Start();
-                            //var _input = new Thread(afterInput);
-                            //_input.Start();
                         }
                         if (input == 0x2000 && risingEdge)
                         {
@@ -573,7 +539,8 @@ namespace p4gpc.p5controls
                             if (menuLayer == 2)
                             {
                                 menuLayer = 1;
-                            } else
+                            }
+                            else
                             {
                                 menuLayer = 0;
                                 var _input = new Thread(ExitPersonaMenu);
@@ -614,18 +581,15 @@ namespace p4gpc.p5controls
                 }
                 if (input == 0x40 && menuSelection == 3) // DOWN - NEXT TURN
                 {
-                    // enter RB into keyboard hook
-                    // var _afterInputNextTurn = new Thread(afterInputNextTurn);
-                    // _afterInputNextTurn.Start();
                     if (NextTurn)
                     {
                         // _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE8220), 0x000000C6840F); NEXT TURN, MAIN BATTLE MENU
-                        _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE9492), 0x009C840F);
+                        _memory.SafeWrite((IntPtr)(nextTurnPointer), 0x009C840F);
                     }
                     else
                     {
                         // _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE8220), 0x000000C6800F); NEXT TURN, MAIN BATTLE MENU
-                        _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE9492), 0x009C850F);
+                        _memory.SafeWrite((IntPtr)(nextTurnPointer), 0x009C850F);
                     }
                     NextTurn = !NextTurn;
                     // _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE8220), 0x000000C6840F);
@@ -638,26 +602,15 @@ namespace p4gpc.p5controls
         {
             esiValue = edi + 4;
             _memory.SafeRead((IntPtr)esiValue, out byte highlightedMenuOption); // what is the highlighted menu item?
-            // _utils.Log($"{highlightedMenuOption}");
         }
         public void menuEnemySelected(int esi)
         {
-            // _utils.Log($"{esi}");
-            // _memory.SafeRead((IntPtr)esi, out byte highlightedMenuOption); // what is the highlighted menu item?
             _utils.LogDebug($"Enemy Selected ESI: {esi}");
         }
         public void attackAnalysis(int esi)
         {
             int esiOffset = esi + 2;
             _memory.SafeRead((IntPtr)esiOffset, out byte highlightedMenuOption);
-            // _utils.Log($"{highlightedMenuOption}");
-            /*_utils.Log($"{esiOffset}");
-            if (highlightedMenuOption == 3)
-            {
-                _utils.Log($"In main battle menu, changing to 0");
-                _memory.SafeWrite((IntPtr)esiOffset, 0x0);
-                _attackAnalysis.Disable();
-            }*/
         }
         public void btlAction(int eax)
         {
@@ -687,12 +640,10 @@ namespace p4gpc.p5controls
             _memory.SafeRead((IntPtr)(eax + 0xA4), out int activeMember);
             if (activeMember == 1)
             {
-                // yu
-                tacticsMenuActive = 1;
+                tacticsMenuActive = 1; // yu
             } else
             {
-                // not yu
-                tacticsMenuActive = 0;
+                tacticsMenuActive = 0; // not yu
             }
         }
         // Hooked function delegate

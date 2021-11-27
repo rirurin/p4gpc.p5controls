@@ -14,6 +14,7 @@ using static p4gpc.p5controls.Utils;
 using Reloaded.Memory.Sigscan;
 using Reloaded.Memory.Sigscan.Structs;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace p4gpc.p5controls
 {
@@ -35,12 +36,13 @@ namespace p4gpc.p5controls
         // Base address (probably won't ever change)
         private int _baseAddress;
         // Functionalities
-
         private BattleControls _battle;
 
         // Current mod configuration
         private Config _config { get; set; }
         private Utils _utils;
+
+        // Pointers
 
         public Inputs(IReloadedHooks hooks, Config configuration, Utils utils)
         {
@@ -51,6 +53,7 @@ namespace p4gpc.p5controls
             _utils = utils;
 
             // Create input hook
+            _utils.LogIntro();
             _utils.Log("Hooking into input functions");
 
             try
@@ -72,26 +75,41 @@ namespace p4gpc.p5controls
 
                 // Create function hooks
                 using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
-                int keyboardAddress, controllerAddress;
-                
-                keyboardAddress = scanner.CompiledFindPattern("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8").Offset + _baseAddress;
-                controllerAddress = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
-                // controllerAddress = 0x267CC2D0 + _baseAddress;
-                // 267CC2D3
-                // 267CC2D6
-                _keyboardHook = hooks.CreateAsmHook(keyboardFunction, keyboardAddress, AsmHookBehaviour.ExecuteFirst).Activate(); // call 85 DB 74 05 E8 7F 81 13 DA
-                _controllerHook = hooks.CreateAsmHook(controllerFunction, controllerAddress, AsmHookBehaviour.ExecuteAfter).Activate();
+
+                int keyboardPointer = 0;
+                int controllerPointer = 0;
+
+                List<Task> pointers = new List<Task>();
+                pointers.Add(Task.Run(() =>
+                {
+                    keyboardPointer = scanner.CompiledFindPattern("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8").Offset + _baseAddress;
+                })); // Read input from keyboard
+                pointers.Add(Task.Run(() =>
+                {
+                    controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
+                })); // Read input from controller
+
+                try
+                {
+                    Task.WaitAll(pointers.ToArray());
+                }
+                catch (Exception e)
+                {
+                    throw e;
+                }
+
+                _keyboardHook = hooks.CreateAsmHook(keyboardFunction, keyboardPointer, AsmHookBehaviour.ExecuteFirst).Activate(); // call 85 DB 74 05 E8 7F 81 13 DA
+                _controllerHook = hooks.CreateAsmHook(controllerFunction, controllerPointer, AsmHookBehaviour.ExecuteAfter).Activate();
+
+                _utils.Log("Successfully hooked into input functions");
+                _battle = new BattleControls(_utils, _baseAddress, _config, _memory, _hooks);
             }
             catch (Exception e)
             {
                 _utils.LogError($"Error hooking into input functions. Unloading mod", e);
                 Suspend();
                 return;
-            }
-
-            _utils.Log("Successfully hooked into input functions");
-
-            _battle = new BattleControls(_utils, _baseAddress, _config, _memory, _hooks);
+            } 
         }
 
         public void Suspend()
