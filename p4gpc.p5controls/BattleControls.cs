@@ -84,13 +84,6 @@ namespace p4gpc.p5controls
                     $"use32",
                     $"mov edi, 16384",
                 };
-                string[] selectedEnemyFunction =
-                {
-                    $"use32",
-                    $"{hooks.Utilities.PushCdeclCallerSavedRegisters()}",
-                    $"{hooks.Utilities.GetAbsoluteCallMnemonics(menuEnemySelected, out _selectedEnemyReverseWrapper)}",
-                    $"{hooks.Utilities.PopCdeclCallerSavedRegisters()}",
-                };
                 string[] attackAnalysisFunction =
                 {
                     $"use32",
@@ -131,14 +124,11 @@ namespace p4gpc.p5controls
                 // hooks (grab register information from here)
                 long menuHookPointer = 0;
                 long inputBlockPointer = 0;
-                long selectedEnemyPointer = 0;
                 long battleActionPointer = 0;
                 long rushModePointer = 0;
                 long personaMenuPointer = 0;
                 long assistButtonPointer = 0;
-                long personaSwitcherPointer = 0;
                 long tacticsPointer = 0;
-                long inBattlePointer = 0;
 
                 // Sig Scan for addresses asynchronously so it doesn't take like 5 hours
 
@@ -151,10 +141,6 @@ namespace p4gpc.p5controls
                 {
                     inputBlockPointer = SigScan("89 3D ?? ?? ?? ?? 89 C1 A3 ?? ?? ?? ?? 80 FA D0 76 ??", "Input Block Pointer");
                 })); // blocks user input temporarily to stop weird stuff happening
-                pointers.Add(Task.Run(() =>
-                {
-                    selectedEnemyPointer = SigScan("8B ?? ?? ?? 66 ?? ?? ?? 74 ?? 80 ?? ?? ?? 66", "Selected Enemy Pointer");
-                })); // reads a value corresponding to the highlighted enemy when in Attack mode
                 pointers.Add(Task.Run(() =>
                 {
                     battleActionPointer = SigScan("66 89 77 0C C7 47 24 00 00 00 00 57 8D 04 40 8B 04 85", "Battle Action Pointer");
@@ -187,10 +173,6 @@ namespace p4gpc.p5controls
                 {
                     tacticsPointer = SigScan("66 ?? ?? ?? ?? ?? ?? ?? 75 ?? 31 ?? 8D", "Tactics Highlighted Pointer");
                 })); // used to detect if the user can access tactics or persona menu depending on the active party member
-                pointers.Add(Task.Run(() =>
-                {
-                    inBattlePointer = SigScan("0F ?? ?? 85 ?? F3 0F 10 15 ?? ?? ?? ?? 5B", "In Battle Pointer");
-                })); // find if the user is in battle
 
                 // Sig Scan for 0F ?? ?? 85 ?? F3 0F 10 15 ?? ?? ?? ?? 5B + 0x11 for address to find if the user is in battle
                 try
@@ -202,7 +184,6 @@ namespace p4gpc.p5controls
                 }
 
                 battleActionPointer += 0xF;
-                inBattlePointer += 0x11;
 
                 // Tick Function
 
@@ -225,7 +206,6 @@ namespace p4gpc.p5controls
 
                 _selectedMenuHook =     hooks.CreateAsmHook(selectedItemFunction, (menuHookPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _blockInput =           hooks.CreateAsmHook(blockInputFunction, (inputBlockPointer), AsmHookBehaviour.ExecuteFirst).Activate();
-                _selectedEnemyHook =    hooks.CreateAsmHook(selectedEnemyFunction, (selectedEnemyPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _btlAction =            hooks.CreateAsmHook(btlActionFunction, (battleActionPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _personaMenu =          hooks.CreateAsmHook(personaMenuFunction, (personaMenuPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _tacticsMenu =          hooks.CreateAsmHook(tacticsFunction, (tacticsPointer), AsmHookBehaviour.ExecuteFirst).Activate();
@@ -606,10 +586,6 @@ namespace p4gpc.p5controls
         {
             esiValue = edi + 4;
             _memory.SafeRead((IntPtr)esiValue, out byte highlightedMenuOption); // what is the highlighted menu item?
-        }
-        public void menuEnemySelected(int esi)
-        {
-            _utils.LogDebug($"Enemy Selected ESI: {esi}");
         }
         public void attackAnalysis(int esi)
         {
