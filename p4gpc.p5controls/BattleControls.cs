@@ -126,21 +126,6 @@ namespace p4gpc.p5controls
                 _baseAddress = thisProcess.MainModule.BaseAddress.ToInt32();
                 using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
 
-                // tick function
-
-                var _tick = new Thread(tick);
-                _tick.Start();
-
-                void tick()
-                {
-                    var stopwatch = Stopwatch.StartNew();
-                    while (true)
-                    {
-                        _memory.SafeRead((IntPtr)(_baseAddress + 0x21A967B0), out inBattle); // is the user in battle?
-                        Thread.Sleep(50);
-                    }
-                }
-
                 // sig scan for all the addresses :raidoufrost:
 
                 // hooks (grab register information from here)
@@ -153,9 +138,10 @@ namespace p4gpc.p5controls
                 long assistButtonPointer = 0;
                 long personaSwitcherPointer = 0;
                 long tacticsPointer = 0;
-                
+                long inBattlePointer = 0;
+
                 // Sig Scan for addresses asynchronously so it doesn't take like 5 hours
-                
+
                 List<Task> pointers = new List<Task>();
                 pointers.Add(Task.Run(() =>
                 {
@@ -201,12 +187,12 @@ namespace p4gpc.p5controls
                 {
                     tacticsPointer = SigScan("66 ?? ?? ?? ?? ?? ?? ?? 75 ?? 31 ?? 8D", "Tactics Highlighted Pointer");
                 })); // used to detect if the user can access tactics or persona menu depending on the active party member
-                /*
                 pointers.Add(Task.Run(() =>
                 {
-                    personaSwitcherPointer = SigScan("F7 46 ?? ?? ?? ?? ?? 74 AF", "Persona Switcher Pointer");
-                })); // pointer that determines if the persona menu can be accessed
-                */
+                    inBattlePointer = SigScan("0F ?? ?? 85 ?? F3 0F 10 15 ?? ?? ?? ?? 5B", "In Battle Pointer");
+                })); // find if the user is in battle
+
+                // Sig Scan for 0F ?? ?? 85 ?? F3 0F 10 15 ?? ?? ?? ?? 5B + 0x11 for address to find if the user is in battle
                 try
                 {
                     Task.WaitAll(pointers.ToArray());
@@ -215,7 +201,25 @@ namespace p4gpc.p5controls
                     throw e;
                 }
 
-                battleActionPointer = battleActionPointer + 0xF;
+                battleActionPointer += 0xF;
+                inBattlePointer += 0x11;
+
+                // Tick Function
+
+                var _tick = new Thread(tick);
+                _tick.Start();
+
+                void tick()
+                {
+                    var stopwatch = Stopwatch.StartNew();
+                    while (true)
+                    {
+                        _memory.SafeRead((IntPtr)(_baseAddress + 0x21A967B0), out inBattle); // is the user in battle?
+                        Thread.Sleep(50);
+                    }
+                }
+
+                // Assembly Hooks
 
                 _utils.Log("Hooking into battle functions");
 
@@ -416,7 +420,7 @@ namespace p4gpc.p5controls
                         if (NextTurn) // Cancel Next Turn
                         {
                             // _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE8220), 0x000000C6840F);
-                            _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE9492), 0x009C840F);
+                            _memory.SafeWrite((IntPtr)(nextTurnPointer), 0x009C840F);
                             NextTurn = !NextTurn;
                         }
                         else

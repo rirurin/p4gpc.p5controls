@@ -42,15 +42,18 @@ namespace p4gpc.p5controls
         private Config _config { get; set; }
         private Utils _utils;
 
+        private bool _switcher;
+
         // Pointers
 
-        public Inputs(IReloadedHooks hooks, Config configuration, Utils utils)
+        public Inputs(IReloadedHooks hooks, Config configuration, Utils utils, bool switcher)
         {
             // Initialise private variables
             _config = configuration;
             _hooks = hooks;
             _memory = new Memory();
             _utils = utils;
+            _switcher = switcher;
 
             // Create input hook
             _utils.LogIntro();
@@ -76,18 +79,47 @@ namespace p4gpc.p5controls
                 // Create function hooks
                 using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
 
-                int keyboardPointer = 0;
-                int controllerPointer = 0;
+                long keyboardPointer = 0;
+                long controllerPointer = 0;
+                long switcherAddress = 0;
+                long instantSwitch1 = 0;
+                long instantSwitch2 = 0;
+
+                if (!_switcher)
+                {
+                    _utils.Log("Could not find Infinite Persona Switcher, applying patches to replicate switcher");
+                }
 
                 List<Task> pointers = new List<Task>();
+
                 pointers.Add(Task.Run(() =>
                 {
-                    keyboardPointer = scanner.CompiledFindPattern("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8").Offset + _baseAddress;
+                    // keyboardPointer = scanner.CompiledFindPattern("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8").Offset + _baseAddress;
+                    keyboardPointer = SigScanI("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8", "Keyboard Hook");
                 })); // Read input from keyboard
                 pointers.Add(Task.Run(() =>
                 {
-                    controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
+                    // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
+                    controllerPointer = SigScanI("0F AB D3 89 5D C8", "Controller Hook");
                 })); // Read input from controller
+                if (!_switcher)
+                {
+                    pointers.Add(Task.Run(() =>
+                    {
+                        // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
+                        switcherAddress = SigScanI("F7 46 ?? ?? ?? ?? ?? 74 AF", "Persona Switcher Pointer");
+                    }));
+                    pointers.Add(Task.Run(() =>
+                    {
+                        // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
+                        instantSwitch1 = SigScanI("0F B7 7B 78 BA 0C 00 00 00 8B 73 38", "Persona Switcher Animation Cancel 1");
+                    }));
+                    pointers.Add(Task.Run(() =>
+                    {
+                        // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
+                        instantSwitch2 = SigScanI("A1 ?? ?? ?? ?? 8B 53 38 6A 00 6A 00", "Persona Switcher Animation Cancel 2");
+                    }));
+                }
 
                 try
                 {
@@ -101,6 +133,13 @@ namespace p4gpc.p5controls
                 _keyboardHook = hooks.CreateAsmHook(keyboardFunction, keyboardPointer, AsmHookBehaviour.ExecuteFirst).Activate(); // call 85 DB 74 05 E8 7F 81 13 DA
                 _controllerHook = hooks.CreateAsmHook(controllerFunction, controllerPointer, AsmHookBehaviour.ExecuteAfter).Activate();
 
+                if (!_switcher)
+                {
+                    _memory.SafeWrite((IntPtr)switcherAddress + 0x7, 0xAF70);
+                    _memory.SafeWrite((IntPtr)instantSwitch1, 0x900000011FE9);
+                    _memory.SafeWrite((IntPtr)instantSwitch2, 0x000000AAE9);
+                }
+
                 _utils.Log("Successfully hooked into input functions");
                 _battle = new BattleControls(_utils, _baseAddress, _config, _memory, _hooks);
             }
@@ -110,6 +149,23 @@ namespace p4gpc.p5controls
                 Suspend();
                 return;
             } 
+        }
+
+        public long SigScanI(string pattern, string functionName)
+        {
+            try
+            {
+                using var thisProcess = Process.GetCurrentProcess();
+                using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
+                long functionAddress = scanner.CompiledFindPattern(pattern).Offset + _baseAddress;
+                _utils.LogSuccess($"Found function {functionName} at 0x{functionAddress:X}");
+                return functionAddress;
+            }
+            catch (Exception e)
+            {
+                _utils.LogError($"Error occured while finding the function {functionName}, function terminated. Please report this, including a list of your other Reloaded-II mods and your version of P4G to *insert gamebanana link here*", e);
+                return -1;
+            }
         }
 
         public void Suspend()

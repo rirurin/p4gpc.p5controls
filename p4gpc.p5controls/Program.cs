@@ -16,6 +16,8 @@ namespace p4gpc.p5controls
         /// </summary>
         private const string MyModId = "p4gpc.p5controls";
 
+        private const string InfiniteSwitcherId = "p4gpc.infinitepersonaswitcher";
+
         /// <summary>
         /// Used for writing text to the console window.
         /// </summary>
@@ -54,12 +56,21 @@ namespace p4gpc.p5controls
             // Need a different name, format or more configurations? Modify the `Configurator`.
             // If you do not want a config, remove Configuration folder and Config class.
             var configurator = new Configurator(_modLoader.GetDirectoryForModId(MyModId));
+            bool _switcher = false;
+            try
+            {
+                _logger.WriteLine($"[P5BattleControls] [OK] Found Infinite Persona Switcher at {_modLoader.GetDirectoryForModId(InfiniteSwitcherId)}", System.Drawing.Color.LimeGreen);
+                _switcher = true;
+            } catch (Exception e)
+            {
+                _logger.WriteLine("[P5BattleControls] Could not find Infinite Persona Switcher");
+            }
             _configuration = configurator.GetConfiguration<Config>(0);
             _configuration.ConfigurationUpdated += OnConfigurationUpdated;
 
             /* Your mod code starts here. */
             _utils = new Utils(_configuration, _logger);
-            _inputs = new Inputs(_hooks, _configuration, _utils);
+            _inputs = new Inputs(_hooks, _configuration, _utils, _switcher);
 
         }
 
