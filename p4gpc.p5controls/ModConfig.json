@@ -2,7 +2,7 @@
   "ModId": "p4gpc.p5controls",
   "ModName": "Persona 5 Battle Controls",
   "ModAuthor": "Rirurin",
-  "ModVersion": "1.0.0",
+  "ModVersion": "1.0.1",
   "ModDescription": "Recreates the functionality of Persona 5's Battle Menu.",
   "ModDll": "p4gpc.p5controls.dll",
   "ModIcon": "Preview.png",

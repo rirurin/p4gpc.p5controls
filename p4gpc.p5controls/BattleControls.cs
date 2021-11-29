@@ -219,7 +219,8 @@ namespace p4gpc.p5controls
                 _memory.SafeWrite((IntPtr)(rushModePointer + 0x1C), 0x0000000821E881C405F7);
 
                 // Replace Cross in All Out Attack/Party Assist with Triangle
-                _memory.SafeWrite((IntPtr)(assistButtonPointer - 0x5B), 0x00001000);
+                if (config.AllOutAttack)
+                    _memory.SafeWrite((IntPtr)(assistButtonPointer - 0x5B), 0x00001000);
 
                 // Remove holding RB for next turn
                 _memory.SafeWrite((IntPtr)(nextTurnPointer - 0x1F), 0x00000000);

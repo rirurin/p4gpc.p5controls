@@ -17,5 +17,9 @@ namespace p4gpc.p5controls.Configuration
         [DisplayName("Debug Mode")]
         [Description("Enables debug mode")]
         public bool DebugEnabled { get; set; } = true;
+
+        [DisplayName("All out Attack to Triangle")]
+        [Description("Changes all out attack from Cross to Triangle")]
+        public bool AllOutAttack { get; set; } = true;
     }
 }
