@@ -56,6 +56,7 @@ namespace p4gpc.p5controls
         public bool risenEdge = false;
         public int tacticsMenuActive = 0;
         private int personaMenuStatus = 0;
+        public bool otherPartyMembers = true;
 
         // Global pointers
         public long menuSelectPointer = 0;
@@ -197,6 +198,14 @@ namespace p4gpc.p5controls
                     {
                         _memory.SafeRead((IntPtr)(_baseAddress + 0x21A967B0), out inBattle); // is the user in battle?
                         Thread.Sleep(50);
+                        _memory.SafeRead((IntPtr)(_baseAddress + 0x49DC3C4), out int partyMembers);
+                        if (partyMembers == 0)
+                        {
+                            otherPartyMembers = false;
+                        } else
+                        {
+                            otherPartyMembers = true;
+                        }
                     }
                 }
 
@@ -411,35 +420,16 @@ namespace p4gpc.p5controls
                             _input.Start();
                         }
                     }
-                    if (input == 0x4000) // CROSS - ATTACK
-                    {
-
-                    }
-                    if (input == 0x8) // START - RUSH
-                    {
-                    }
                     if (input == 0x1) // SELECT - ESCAPE
                     {
                         menuSelection = 7;
                         var _input = new Thread(Input);
                         _input.Start();
                     }
-                    if (input == 0x400) // LB - ANALYZE (for real)
-                    {
-                        // _memory.SafeWrite((IntPtr)(menuSelect), 0x70732E33);
-                    }
-                    if (input == 0x20) // LEFT - CHANGE TARGET
-                    {
-
-                    }
-                    if (input == 0x80) // RIGHT - CHANGE TARGET
-                    {
-
-                    }
                     if (input == 0x800) // RB - ASSIST
                     {
                     }
-                    if (input == 0x10 && tacticsMenuActive == 1) // UP - TACTICS
+                    if (input == 0x10 && tacticsMenuActive == 1 && otherPartyMembers) // UP - TACTICS
                     {
                         // substitute for L2 not being in Vita controller set
                         menuSelection = 1;
