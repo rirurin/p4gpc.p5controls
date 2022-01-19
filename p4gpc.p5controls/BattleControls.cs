@@ -33,6 +33,7 @@ namespace p4gpc.p5controls
         private IReverseWrapper<BtlActionFunction> _btlActionReverseWrapper;
         private IReverseWrapper<PersonaMenuFunction> _personaMenuReverseWrapper;
         private IReverseWrapper<TacticsMenuFunction> _tacticsMenuReverseWrapper;
+        private IReverseWrapper<CheckEscapeFunction> _checkEscapeReverseWrapper;
 
         // ASM Hooks
         private IAsmHook _selectedMenuHook;
@@ -41,6 +42,7 @@ namespace p4gpc.p5controls
         private IAsmHook _btlAction;
         private IAsmHook _personaMenu;
         private IAsmHook _tacticsMenu;
+        private IAsmHook _checkEscape;
 
         // Variables
         public int esiValue;
@@ -57,6 +59,7 @@ namespace p4gpc.p5controls
         public int tacticsMenuActive = 0;
         private int personaMenuStatus = 0;
         public bool otherPartyMembers = true;
+        public bool canUseEscape = true;
 
         // Global pointers
         public long menuSelectPointer = 0;
@@ -114,15 +117,21 @@ namespace p4gpc.p5controls
                     $"{hooks.Utilities.GetAbsoluteCallMnemonics(activePartyMember, out _tacticsMenuReverseWrapper)}",
                     $"{hooks.Utilities.PopCdeclCallerSavedRegisters()}",
                 };
+                string[] checkEscapeFunction =
+                {
+                    $"use32",
+                    $"{hooks.Utilities.PushCdeclCallerSavedRegisters()}",
+                    $"{hooks.Utilities.GetAbsoluteCallMnemonics(checkEscape, out _checkEscapeReverseWrapper)}",
+                    $"{hooks.Utilities.PopCdeclCallerSavedRegisters()}",
+                };
 
                 // scanner init code
                 using var thisProcess = Process.GetCurrentProcess();
                 _baseAddress = thisProcess.MainModule.BaseAddress.ToInt32();
                 using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
 
-                // sig scan for all the addresses :raidoufrost:
-
                 // hooks (grab register information from here)
+
                 long menuHookPointer = 0;
                 long inputBlockPointer = 0;
                 long battleActionPointer = 0;
@@ -130,6 +139,7 @@ namespace p4gpc.p5controls
                 long personaMenuPointer = 0;
                 long assistButtonPointer = 0;
                 long tacticsPointer = 0;
+                long checkEscapePointer = 0;
 
                 // Sig Scan for addresses asynchronously so it doesn't take like 5 hours
 
@@ -174,6 +184,10 @@ namespace p4gpc.p5controls
                 {
                     tacticsPointer = SigScan("66 ?? ?? ?? ?? ?? ?? ?? 75 ?? 31 ?? 8D", "Tactics Highlighted Pointer");
                 })); // used to detect if the user can access tactics or persona menu depending on the active party member
+                pointers.Add(Task.Run(() =>
+                {
+                    checkEscapePointer = SigScan("F6 ?? ?? ?? ?? ?? 01 E9 ?? ?? ?? ?? 8B", "Check Escape Status Pointer");
+                })); // detect whether the player can use escape or not
 
                 // Sig Scan for 0F ?? ?? 85 ?? F3 0F 10 15 ?? ?? ?? ?? 5B + 0x11 for address to find if the user is in battle
                 try
@@ -199,13 +213,7 @@ namespace p4gpc.p5controls
                         _memory.SafeRead((IntPtr)(_baseAddress + 0x21A967B0), out inBattle); // is the user in battle?
                         Thread.Sleep(50);
                         _memory.SafeRead((IntPtr)(_baseAddress + 0x49DC3C4), out int partyMembers);
-                        if (partyMembers == 0)
-                        {
-                            otherPartyMembers = false;
-                        } else
-                        {
-                            otherPartyMembers = true;
-                        }
+                        otherPartyMembers = partyMembers == 0 ? false : true;
                     }
                 }
 
@@ -218,6 +226,7 @@ namespace p4gpc.p5controls
                 _btlAction =            hooks.CreateAsmHook(btlActionFunction, (battleActionPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _personaMenu =          hooks.CreateAsmHook(personaMenuFunction, (personaMenuPointer), AsmHookBehaviour.ExecuteFirst).Activate();
                 _tacticsMenu =          hooks.CreateAsmHook(tacticsFunction, (tacticsPointer), AsmHookBehaviour.ExecuteFirst).Activate();
+                _checkEscape =          hooks.CreateAsmHook(checkEscapeFunction, (checkEscapePointer), AsmHookBehaviour.ExecuteFirst).Activate();
 
                 _blockInput.Disable();
                 _personaMenu.Disable();
@@ -228,8 +237,7 @@ namespace p4gpc.p5controls
                 _memory.SafeWrite((IntPtr)(rushModePointer + 0x1C), 0x0000000821E881C405F7);
 
                 // Replace Cross in All Out Attack/Party Assist with Triangle
-                if (config.AllOutAttack)
-                    _memory.SafeWrite((IntPtr)(assistButtonPointer - 0x5B), 0x00001000);
+                if (config.AllOutAttack) _memory.SafeWrite((IntPtr)(assistButtonPointer - 0x5B), 0x00001000);
 
                 // Remove holding RB for next turn
                 _memory.SafeWrite((IntPtr)(nextTurnPointer - 0x1F), 0x00000000);
@@ -274,23 +282,10 @@ namespace p4gpc.p5controls
             _utils.LogDebug($"Battle Menu Input Detected...");
             for (int k = 0; k < 4; k++)
             {
-                if ((menuSelection == 5 || menuSelection == 3) && personaMenuStatus == 1)
-                {
-                    _personaMenu.Disable();
-                }
+                if ((menuSelection == 5 || menuSelection == 3) && personaMenuStatus == 1) _personaMenu.Disable();
                 Thread.Sleep(10);
             }
-            /*
-            _utils.LogDebug($"{personaMenuStatus}");
-            if (menuSelection == 5 || menuSelection == 3)
-            {
-                _personaMenu.Disable();
-            }
-            */
-            while (risenEdge && menuSelection != 2)
-            {
-                Thread.Sleep(10);
-            }
+            while (risenEdge && menuSelection != 2) Thread.Sleep(10);
             _memory.SafeWrite((IntPtr)(menuSelectPointer), 0xFFFF3785);
             _utils.LogDebug($"Now safe to exit out, disabling input blocker");
             _blockInput.Disable();
@@ -300,7 +295,6 @@ namespace p4gpc.p5controls
             _utils.LogDebug($"Battle Menu Input Detected...");
             Thread.Sleep(150);
             _utils.LogDebug($"Now safe to exit out, disabling input blocker");
-            // hInput = 0x0;
             _blockInput.Disable();
         }
         public void beginTurn()
@@ -320,11 +314,7 @@ namespace p4gpc.p5controls
             _blockInput.Enable();
             Thread.Sleep(40);
             forceEnterMenu();
-            //inMainBattleMenu = false;
-            if (menuSelection != 5)
-            {
-                inMainBattleMenu = !inMainBattleMenu;
-            }
+            if (menuSelection != 5) inMainBattleMenu = !inMainBattleMenu;
             _afterInput.Start();
         }
         public void InputFromList()
@@ -335,11 +325,7 @@ namespace p4gpc.p5controls
             Thread.Sleep(75);
             exitingFromList = false;
             forceEnterMenu();
-            //inMainBattleMenu = false;
-            if (menuSelection != 5)
-            {
-                inMainBattleMenu = !inMainBattleMenu;
-            }
+            if (menuSelection != 5) inMainBattleMenu = !inMainBattleMenu;
             _afterInput.Start();
         }
         public void ExitInnerMenu()
@@ -350,10 +336,7 @@ namespace p4gpc.p5controls
         }
         public void ExitPersonaMenu()
         {
-            while (risenEdge)
-            {
-                Thread.Sleep(10);
-            }
+            while (risenEdge) Thread.Sleep(10);
             _blockInput.Enable();
             Thread.Sleep(40);
             _blockInput.Disable();
@@ -367,28 +350,7 @@ namespace p4gpc.p5controls
             _utils.LogDebug($"Input was {(Input)input} and was {(risingEdge ? "rising" : "falling")} edge");
             if (inBattle != 0)
             {
-                // P5 MENU REFERENCE:
-
-                // triangle - Persona
-                // square - Item
-                // Circle - Guard
-                // Cross - Attack (one enemy, goes instantly to attack (I don't remember if P4G does this so keep note of that))
-                // Start - Rush
-                // LB - Analyse (actually is in P4G, no need to change)
-                // L2 - Tactics (substitude for Left since the Vita has no L2)
-                // Down - Next Turn (RB in P4G)
-                // RB - Assist (that's just analyse?)
-
-                // All Out Attack is Triangle
-
-                if (risingEdge)
-                {
-                    risenEdge = true;
-                }
-                else
-                {
-                    risenEdge = false;
-                }
+                risenEdge = (risingEdge == true) ? true : false;
 
                 if (inMainBattleMenu)
                 {
@@ -398,14 +360,12 @@ namespace p4gpc.p5controls
                         var _input = new Thread(Input);
                         _input.Start();
 
-                    }
-                    if (input == 0x8000) // SQUARE - ITEM
+                    } else if (input == 0x8000) // SQUARE - ITEM
                     {
                         menuSelection = 6;
                         var _input = new Thread(Input);
                         _input.Start();
-                    }
-                    if (input == 0x2000) // CIRCLE - GUARD
+                    } else if (input == 0x2000) // CIRCLE - GUARD
                     {
                         if (NextTurn) // Cancel Next Turn
                         {
@@ -419,34 +379,24 @@ namespace p4gpc.p5controls
                             var _input = new Thread(Input);
                             _input.Start();
                         }
-                    }
-                    if (input == 0x1) // SELECT - ESCAPE
+                    } else if (input == 0x1 && canUseEscape) // SELECT - ESCAPE
                     {
                         menuSelection = 7;
                         var _input = new Thread(Input);
                         _input.Start();
-                    }
-                    if (input == 0x800) // RB - ASSIST
+                    } else if (input == 0x10 && tacticsMenuActive == 1 && otherPartyMembers) // UP - TACTICS
                     {
-                    }
-                    if (input == 0x10 && tacticsMenuActive == 1 && otherPartyMembers) // UP - TACTICS
-                    {
-                        // substitute for L2 not being in Vita controller set
                         menuSelection = 1;
                         var _input = new Thread(Input);
                         _input.Start();
                     }
+
                 }
                 else
                 {
                     if (input == 0x2000 && menuLayer == 0) // CIRCLE - GO BACK
                     {
-                        if (menuSelection == 5)
-                        {
-                            // _personaMenu.Enable();
-                            personaMenuStatus = 0;
-                        }
-                        // inMainBattleMenu = true;
+                        if (menuSelection == 5) personaMenuStatus = 0;
                         menuSelection = 3;
                         var _input = new Thread(Input);
                         _input.Start();
@@ -458,7 +408,7 @@ namespace p4gpc.p5controls
                             var _menu = new Thread(ExitInnerMenu);
                             _menu.Start();
                         }
-                        if (input == 0x4000 && risingEdge)
+                        else if (input == 0x4000 && risingEdge)
                         {
                             if (menuLayer == 0)
                             {
@@ -483,17 +433,17 @@ namespace p4gpc.p5controls
                             var _input = new Thread(Input);
                             _input.Start();
                         }
-                        if (input == 0x2000 && risingEdge)
+                        else if (input == 0x2000 && risingEdge)
                         {
                             var _menu = new Thread(ExitInnerMenu);
                             _menu.Start();
                         }
-                        if (input == 0x4000 && risingEdge)
+                        else if (input == 0x4000 && risingEdge)
                         {
                             menuLayer += 1;
                             _utils.LogDebug($"menulayer do be {menuLayer}");
                         }
-                        if (input == 0x8000 && risingEdge)
+                        else if (input == 0x8000 && risingEdge)
                         {
                             if (menuLayer == 0)
                             {
@@ -511,10 +461,7 @@ namespace p4gpc.p5controls
                     {
                         if (input == 0x2000)
                         {
-                            if (menuLayer == 2)
-                            {
-                                menuLayer = 1;
-                            }
+                            if (menuLayer == 2) menuLayer = 1;
                             else
                             {
                                 menuLayer = 0;
@@ -522,10 +469,7 @@ namespace p4gpc.p5controls
                                 _input.Start();
                             }
                         }
-                        if (input == 0x8000 && risingEdge)
-                        {
-                            menuLayer = 2;
-                        }
+                        else if (input == 0x8000 && risingEdge) menuLayer = 2;
                     }
                     if (menuSelection == 6)
                     {
@@ -534,7 +478,7 @@ namespace p4gpc.p5controls
                             var _menu = new Thread(ExitInnerMenu);
                             _menu.Start();
                         }
-                        if (input == 0x8000 && risingEdge)
+                        else if (input == 0x8000 && risingEdge)
                         {
                             if (menuLayer == 0)
                             {
@@ -547,7 +491,7 @@ namespace p4gpc.p5controls
                                 _utils.LogDebug($"menulayer do be {menuLayer}");
                             }
                         }
-                        if (input == 0x4000 && risingEdge)
+                        else if (input == 0x4000 && risingEdge)
                         {
                             menuLayer += 1;
                             _utils.LogDebug($"menulayer do be {menuLayer}");
@@ -567,7 +511,6 @@ namespace p4gpc.p5controls
                         _memory.SafeWrite((IntPtr)(nextTurnPointer), 0x009C850F);
                     }
                     NextTurn = !NextTurn;
-                    // _memory.SafeWrite((IntPtr)(_baseAddress + 0x21FE8220), 0x000000C6840F);
                 }
             }
         }
@@ -600,22 +543,17 @@ namespace p4gpc.p5controls
         public void runPersonaMenu(int eax)
         {
             _utils.LogDebug($"Persona Menu EAX: {eax}, {personaMenuStatus}");
-            if (eax == 3)
-            {
-                personaMenuStatus = 1;
-            }
+            if (eax == 3) personaMenuStatus = 1;
         }
         public void activePartyMember (int eax)
         {
-            // _utils.LogDebug($"{eax}");
             _memory.SafeRead((IntPtr)(eax + 0xA4), out int activeMember);
-            if (activeMember == 1)
-            {
-                tacticsMenuActive = 1; // yu
-            } else
-            {
-                tacticsMenuActive = 0; // not yu
-            }
+            tacticsMenuActive = activeMember == 1 ? 1 : 0; // activeMember = 1 is yu, otherwise other party members
+        }
+        public void checkEscape(int edx)
+        {
+            _memory.SafeRead((IntPtr)(edx + 0xA94), out int escapeSet);
+            canUseEscape = escapeSet % 2 == 0 ? true : false;
         }
         // Hooked function delegate
         [Function(Register.edi, Register.edi, StackCleanup.Callee)]
@@ -641,6 +579,10 @@ namespace p4gpc.p5controls
         [Function(Register.eax, Register.eax, StackCleanup.Callee)]
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void TacticsMenuFunction(int eax);
+
+        [Function(Register.edx, Register.edx, StackCleanup.Callee)]
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void CheckEscapeFunction(int edx);
 
     }
 }
