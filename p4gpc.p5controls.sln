@@ -5,6 +5,10 @@ VisualStudioVersion = 16.0.31624.102
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "p4gpc.p5controls", "p4gpc.p5controls\p4gpc.p5controls.csproj", "{9681E630-C9F6-477A-9A27-BF1880DF85FA}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "p4gpc.inputlibrary", "..\p4gpc.inputlibrary\p4gpc.inputlibrary\p4gpc.inputlibrary.csproj", "{4B05C237-6BCB-4A48-9C5C-B0D0C9F09CC7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p4gpc.inputlibrary.interfaces", "..\p4gpc.inputlibrary\p4gpc.inputlibrary.interfaces\p4gpc.inputlibrary.interfaces.csproj", "{0175D730-78A3-461C-9D02-4DA2A0BC4305}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,14 @@ Global
 		{9681E630-C9F6-477A-9A27-BF1880DF85FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9681E630-C9F6-477A-9A27-BF1880DF85FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9681E630-C9F6-477A-9A27-BF1880DF85FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4B05C237-6BCB-4A48-9C5C-B0D0C9F09CC7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B05C237-6BCB-4A48-9C5C-B0D0C9F09CC7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B05C237-6BCB-4A48-9C5C-B0D0C9F09CC7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B05C237-6BCB-4A48-9C5C-B0D0C9F09CC7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0175D730-78A3-461C-9D02-4DA2A0BC4305}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0175D730-78A3-461C-9D02-4DA2A0BC4305}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0175D730-78A3-461C-9D02-4DA2A0BC4305}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0175D730-78A3-461C-9D02-4DA2A0BC4305}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

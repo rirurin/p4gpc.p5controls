@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>Path/To/Your/Reloaded/Mods/Folder</OutputPath>
+    <OutputPath>..\..\..\..\Rirurin\p4g-cbt\tools\Reloaded\Mods\p4gpc.p5controls\</OutputPath>
   </PropertyGroup>
 
 <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -37,11 +37,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="p4gpc.inputlibrary">
-      <HintPath>..\..\p4gpc.inputlibrary\p4gpc.inputlibrary\obj\Release\p4gpc.inputlibrary.dll</HintPath>
-    </Reference>
-    <Reference Include="p4gpc.inputlibrary.interfaces">
-      <HintPath>..\..\p4gpc.inputlibrary\p4gpc.inputlibrary.interfaces\obj\Release\p4gpc.inputlibrary.interfaces.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\..\p4gpc.inputlibrary\p4gpc.inputlibrary.interfaces\p4gpc.inputlibrary.interfaces.csproj" />
   </ItemGroup>
 </Project>
