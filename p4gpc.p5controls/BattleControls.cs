@@ -128,7 +128,7 @@ namespace p4gpc.p5controls
                 // scanner init code
                 using var thisProcess = Process.GetCurrentProcess();
                 _baseAddress = thisProcess.MainModule.BaseAddress.ToInt32();
-                using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
+                using var scanner = new Reloaded.Memory.Sigscan.Scanner(thisProcess, thisProcess.MainModule);
 
                 // hooks (grab register information from here)
 
@@ -142,6 +142,7 @@ namespace p4gpc.p5controls
                 long checkEscapePointer = 0;
 
                 // Sig Scan for addresses asynchronously so it doesn't take like 5 hours
+
 
                 List<Task> pointers = new List<Task>();
                 pointers.Add(Task.Run(() =>
@@ -254,7 +255,7 @@ namespace p4gpc.p5controls
             try
             {
                 using var thisProcess = Process.GetCurrentProcess();
-                using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
+                using var scanner = new Reloaded.Memory.Sigscan.Scanner(thisProcess, thisProcess.MainModule);
                 long functionAddress = scanner.CompiledFindPattern(pattern).Offset + _baseAddress;
                  _utils.LogSuccess($"Found function {functionName} at 0x{functionAddress:X}");
                 return functionAddress;
@@ -345,9 +346,9 @@ namespace p4gpc.p5controls
         }
 
         // Input handler
-        public void SendInput(int input, bool risingEdge)
+        public void SendInput(int input, bool risingEdge, bool keyboard)
         {
-            _utils.LogDebug($"Input was {(Input)input} and was {(risingEdge ? "rising" : "falling")} edge");
+            //_utils.LogDebug($"Input was {(Input)input} and was {(risingEdge ? "rising" : "falling")} edge");
             if (inBattle != 0)
             {
                 risenEdge = (risingEdge == true) ? true : false;

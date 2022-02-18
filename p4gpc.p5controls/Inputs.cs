@@ -21,12 +21,6 @@ namespace p4gpc.p5controls
     class Inputs
     {
         private IReloadedHooks _hooks;
-        // For calling C# code from ASM.
-        private IReverseWrapper<KeyboardInputFunction> _keyboardReverseWrapper;
-        private IReverseWrapper<ControllerInputFunction> _controllerReverseWrapper;
-        // For maniplulating input reading hooks
-        private IAsmHook _keyboardHook;
-        private IAsmHook _controllerHook;
         // Keeps track of the last inputs for rising/falling edge detection
         private int[] controllerInputHistory = new int[10];
         private int lastControllerInput = 0;
@@ -35,14 +29,16 @@ namespace p4gpc.p5controls
         private IMemory _memory;
         // Base address (probably won't ever change)
         private int _baseAddress;
-        // Functionalities
-        private BattleControls _battle;
 
-        // Current mod configuration
+        // Modules
+        private BattleControls _battle;
         private Config _config { get; set; }
         private Utils _utils;
 
         private bool _switcher;
+
+        public int inBattle;
+        public bool otherPartyMembers = true;
 
         // Pointers
 
@@ -55,6 +51,8 @@ namespace p4gpc.p5controls
             _utils = utils;
             _switcher = switcher;
 
+            _utils.Log("Input.cs");
+
             // Create input hook
             _utils.LogIntro();
             _utils.Log("Hooking into input functions");
@@ -64,60 +62,35 @@ namespace p4gpc.p5controls
                 using var thisProcess = Process.GetCurrentProcess();
                 _baseAddress = thisProcess.MainModule.BaseAddress.ToInt32();
 
-                // Define functions (they're the same but use different reverse wrappers)
-                string[] keyboardFunction =
-                {
-                    $"use32",
-                    $"{hooks.Utilities.GetAbsoluteCallMnemonics(KeyboardInputHappened, out _keyboardReverseWrapper)}",
-                };
-                string[] controllerFunction =
-                {
-                    $"use32",
-                    $"{hooks.Utilities.GetAbsoluteCallMnemonics(ControllerInputHappened, out _controllerReverseWrapper)}",
-                };
-
                 // Create function hooks
                 using var scanner = new Scanner(thisProcess, thisProcess.MainModule);
 
-                long keyboardPointer = 0;
-                long controllerPointer = 0;
                 long switcherAddress = 0;
                 long instantSwitch1 = 0;
                 long instantSwitch2 = 0;
 
-                if (!_switcher)
-                {
-                    _utils.Log("Could not find Infinite Persona Switcher, applying patches to replicate switcher");
-                }
+                if (!_switcher) _utils.Log("Could not find Infinite Persona Switcher, applying patches to replicate switcher");
+                // Check to see if another mod has taken that particular memory address
+                // If TinyAdditions has taken the input hook first,
+                    // Get address of input hook and write that to input
 
                 List<Task> pointers = new List<Task>();
-
-                pointers.Add(Task.Run(() =>
-                {
-                    // keyboardPointer = scanner.CompiledFindPattern("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8").Offset + _baseAddress;
-                    keyboardPointer = SigScanI("85 DB 74 05 E8 ?? ?? ?? ?? 8B 7D F8", "Keyboard Hook");
-                })); // Read input from keyboard
-                pointers.Add(Task.Run(() =>
-                {
-                    // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
-                    controllerPointer = SigScanI("0F AB D3 89 5D C8", "Controller Hook");
-                })); // Read input from controller
                 if (!_switcher)
                 {
                     pointers.Add(Task.Run(() =>
                     {
                         // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
-                        switcherAddress = SigScanI("F7 46 ?? ?? ?? ?? ?? 74 AF", "Persona Switcher Pointer");
+                        switcherAddress = SigScan("F7 46 ?? ?? ?? ?? ?? 74 AF", "Persona Switcher Pointer");
                     }));
                     pointers.Add(Task.Run(() =>
                     {
                         // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
-                        instantSwitch1 = SigScanI("0F B7 7B 78 BA 0C 00 00 00 8B 73 38", "Persona Switcher Animation Cancel 1");
+                        instantSwitch1 = SigScan("0F B7 7B 78 BA 0C 00 00 00 8B 73 38", "Persona Switcher Animation Cancel 1");
                     }));
                     pointers.Add(Task.Run(() =>
                     {
                         // controllerPointer = scanner.CompiledFindPattern("0F AB D3 89 5D C8").Offset + _baseAddress;
-                        instantSwitch2 = SigScanI("A1 ?? ?? ?? ?? 8B 53 38 6A 00 6A 00", "Persona Switcher Animation Cancel 2");
+                        instantSwitch2 = SigScan("A1 ?? ?? ?? ?? 8B 53 38 6A 00 6A 00", "Persona Switcher Animation Cancel 2");
                     }));
                 }
 
@@ -129,9 +102,6 @@ namespace p4gpc.p5controls
                 {
                     throw e;
                 }
-
-                _keyboardHook = hooks.CreateAsmHook(keyboardFunction, keyboardPointer, AsmHookBehaviour.ExecuteFirst).Activate(); // call 85 DB 74 05 E8 7F 81 13 DA
-                _controllerHook = hooks.CreateAsmHook(controllerFunction, controllerPointer, AsmHookBehaviour.ExecuteAfter).Activate();
 
                 if (!_switcher)
                 {
@@ -148,10 +118,25 @@ namespace p4gpc.p5controls
                 _utils.LogError($"Error hooking into input functions. Unloading mod", e);
                 Suspend();
                 return;
-            } 
+            }
+            // Load tick function
+            var _tick = new Thread(tick);
+            _tick.Start();
+
+            void tick()
+            {
+                var stopwatch = Stopwatch.StartNew();
+                while (true)
+                {
+                    _memory.SafeRead((IntPtr)(_baseAddress + 0x21A967B0), out inBattle); // is the user in battle?
+                    Thread.Sleep(50);
+                    _memory.SafeRead((IntPtr)(_baseAddress + 0x49DC3C4), out int partyMembers);
+                    otherPartyMembers = partyMembers == 0 ? false : true;
+                }
+            }
         }
 
-        public long SigScanI(string pattern, string functionName)
+        public long SigScan(string pattern, string functionName)
         {
             try
             {
@@ -170,13 +155,9 @@ namespace p4gpc.p5controls
 
         public void Suspend()
         {
-            _keyboardHook?.Disable();
-            _controllerHook?.Disable();
         }
         public void Resume()
         {
-            _keyboardHook?.Enable();
-            _controllerHook?.Enable();
         }
 
         public void UpdateConfiguration(Config configuration)
@@ -185,149 +166,11 @@ namespace p4gpc.p5controls
         }
 
         // Function that reads all inputs
-        private void InputHappened(int input, bool risingEdge, bool keyboard)
+        public void InputHappened(int input, bool risingEdge, bool keyboard)
         {
-            _battle.SendInput(input, risingEdge);
+            _utils.LogDebug($"Input was {(Input)input} and was {(risingEdge ? "rising" : "falling")} edge");
+            _battle.SendInput(input, risingEdge, true);
 
         }
-
-        // Switches keyboard inputs to match controller ones
-        private void KeyboardInputHappened(int input)
-        {
-            // Switch cross and circle as it is opposite compared to controller
-            if (input == (int)Input.Circle) input = (int)Input.Cross;
-            else if (input == (int)Input.Cross) input = (int)Input.Circle;
-            // Decide whether the input needs to be processed (only rising edge for now)
-            if (RisingEdge(input, lastKeyboardInput))
-                InputHappened(input, true, true);
-            else if (FallingEdge(input, lastKeyboardInput))
-                InputHappened(input, false, true);
-            // Update the last inputs
-            lastKeyboardInput = input;
-            if (controllerInputHistory[0] == 0)
-            {
-                if (lastControllerInput != 0)
-                    InputHappened(input, false, false);
-                lastControllerInput = 0;
-            }
-            _utils.ArrayPush(controllerInputHistory, 0);
-        }
-
-        // Gets controller inputs
-        private void ControllerInputHappened(int input)
-        {
-            //_utils.LogDebug($"Debug input was {input}, lastInput: {lastControllerInputs[0]}, {lastControllerInputs[1]}, {lastControllerInputs[2]} ");
-            // Decide whether the input needs to be processed (only rising edge for now)
-            _utils.ArrayPush(controllerInputHistory, input);
-            input = GetControllerInput();
-
-            if (RisingEdge(input, lastControllerInput))
-                InputHappened(input, true, false);
-            // Update the last input
-            lastControllerInput = input;
-        }
-
-        // Checks if an input was rising edge/falling edge (the button was just pressed/just released)
-        private bool RisingEdge(int currentInput, int lastInput)
-        {
-            if (currentInput == 0) return false;
-            return currentInput != lastInput;
-        }
-        private bool FallingEdge(int currentInput, int lastInput)
-        {
-            return lastInput != 0 && currentInput != lastInput;
-        }
-        // Get controller input
-        private int GetControllerInput()
-        {
-            int inputCombo = 0;
-            int lastInput = 0;
-            // Work out the pressed buttons
-            for (int i = 0; i < controllerInputHistory.Length; i++)
-            {
-                int input = controllerInputHistory[i];
-                // Start of a combo
-                if (lastInput == 0 && input != 0)
-                    inputCombo = input;
-                // Middle of a combo
-                else if (lastInput != 0 && input != 0)
-                    inputCombo += input;
-                // End of a combo
-                else if (input == 0 && lastInput != 0 && i != 1)
-                    break;
-                // Two 0's in a row means the combo must be over
-                else if (i != 0 && input == 0 && lastInput == 0)
-                    break;
-                lastInput = input;
-            }
-            return inputCombo;
-        }
-
-        // Works out what inputs were pressed if a combination of keys were pressed (only applicable to keyboard)
-        private List<Input> GetInputsFromCombo(int inputCombo, bool keyboard)
-        {
-            // List of the inputs found in the combo
-            List<Input> foundInputs = new List<Input>();
-            // Check if the input isn't actually a combo, if so we can directly return it
-            if (Enum.IsDefined(typeof(Input), inputCombo))
-            {
-
-                if (keyboard && inputCombo == (int)Input.Circle)
-                    foundInputs.Add(Input.Cross);
-                else if (keyboard && inputCombo == (int)Input.Cross)
-                    foundInputs.Add(Input.Circle);
-                else
-                    foundInputs.Add((Input)inputCombo);
-                return foundInputs;
-            }
-
-            // Get all possible inputs as an array
-            var possibleInputs = Enum.GetValues(typeof(Input));
-            // Reverse the array so it goes from highest input value to smallest
-            Array.Reverse(possibleInputs);
-            // Go through each possible input to find out which are a part of the key combo
-            foreach (int possibleInput in possibleInputs)
-            {
-                // If input - possibleInput is greater than 0 that input must be a part of the combination
-                // This is the same idea as converting bits to decimal
-                if (inputCombo - possibleInput >= 0)
-                {
-                    inputCombo -= possibleInput;
-                    // Switch cross and circle if it is one of them as it is opposite compared to controller
-                    if (possibleInput == (int)Input.Circle)
-                        foundInputs.Add(Input.Cross);
-                    else if (possibleInput == (int)Input.Cross)
-                        foundInputs.Add(Input.Circle);
-                    else
-                        foundInputs.Add((Input)possibleInput);
-                }
-            }
-            if (foundInputs.Count > 0)
-                _utils.LogDebug($"Input combo was {string.Join(", ", foundInputs)}");
-            return foundInputs;
-        }
-
-        // Checks if the desired input is a part of the combo
-        // (so individual keyboard inputs aren't missed if they were pressed with other keys like pressing esc whilst running)
-        private bool InputInCombo(int inputCombo, Input desiredInput, bool keyboard)
-        {
-            return GetInputsFromCombo(inputCombo, keyboard).Contains(desiredInput);
-        }
-
-        private bool InEvent()
-        {
-            // Get the current event
-            _memory.SafeRead((IntPtr)_baseAddress + 0x9CAB94, out short[] currentEvent, 3);
-            // If either the event major or minor isn't 0 we are in an event otherwise we're not
-            return currentEvent[0] != 0 || currentEvent[2] != 0;
-        }
-
-        [Function(Register.ebx, Register.edi, StackCleanup.Callee)]
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void KeyboardInputFunction(int input);
-
-        [Function(Register.eax, Register.edi, StackCleanup.Callee)]
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void ControllerInputFunction(int input);
     }
 }

@@ -1,15 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <OutputType>WinExe</OutputType>
+	<RootNamespace>p4gpc.p5controls</RootNamespace>
+	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <OutputPath>Path/To/Your/Reloaded/Mods/Folder</OutputPath>
   </PropertyGroup>
+
+<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+</PropertyGroup>
 
   <ItemGroup>
     <None Remove="ModConfig.json" />
@@ -30,4 +36,12 @@
     <PackageReference Include="Reloaded.SharedLib.Hooks" Version="1.9.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="p4gpc.inputlibrary">
+      <HintPath>..\..\p4gpc.inputlibrary\p4gpc.inputlibrary\obj\Release\p4gpc.inputlibrary.dll</HintPath>
+    </Reference>
+    <Reference Include="p4gpc.inputlibrary.interfaces">
+      <HintPath>..\..\p4gpc.inputlibrary\p4gpc.inputlibrary.interfaces\obj\Release\p4gpc.inputlibrary.interfaces.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 </Project>
